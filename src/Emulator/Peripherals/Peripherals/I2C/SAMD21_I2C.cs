@@ -49,7 +49,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         public ushort ReadWord(long offset)
         {
-            if(!wordRegistersCollection.HasRegisterAtOffset(offset))
+            if (!wordRegistersCollection.HasRegisterAtOffset(offset))
             {
                 // NOTE: Fallback to DoubleWord registers if we don't have
                 //       an explicit Word register for given offset
@@ -60,7 +60,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         public void WriteWord(long offset, ushort value)
         {
-            if(!wordRegistersCollection.HasRegisterAtOffset(offset))
+            if (!wordRegistersCollection.HasRegisterAtOffset(offset))
             {
                 // NOTE: Fallback to DoubleWord registers if we don't have
                 //       an explicit Word register for given offset
@@ -74,7 +74,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         public byte ReadByte(long offset)
         {
-            if(!byteRegistersCollection.HasRegisterAtOffset(offset))
+            if (!byteRegistersCollection.HasRegisterAtOffset(offset))
             {
                 // NOTE: Fallback to Word registers if we don't have
                 //       an explicit Byte register for given offset
@@ -85,7 +85,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         public void WriteByte(long offset, byte value)
         {
-            if(!byteRegistersCollection.HasRegisterAtOffset(offset))
+            if (!byteRegistersCollection.HasRegisterAtOffset(offset))
             {
                 // NOTE: Fallback to Word registers if we don't have
                 //       an explicit Byte register for given offset
@@ -99,6 +99,10 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         public override void Reset()
         {
+            state = State.Idle;
+            activePeripheral = null;
+            txQueue.Clear();
+
             doubleWordRegistersCollection.Reset();
             wordRegistersCollection.Reset();
             byteRegistersCollection.Reset();
@@ -116,7 +120,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         private void TryFlush()
         {
-            if(activePeripheral == null || txQueue.Count == 0)
+            if (activePeripheral == null || txQueue.Count == 0)
             {
                 return;
             }
@@ -127,7 +131,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         private void StartTransaction(int address, bool reading)
         {
-            if(!TryGetByAddress(address, out var peripheral))
+            if (!TryGetByAddress(address, out var peripheral))
             {
                 // NOTE: Peripheral with given address is not connected
                 hostOnBusInterruptPending.Value = true;
@@ -143,7 +147,7 @@ namespace Antmicro.Renode.Peripherals.I2C
 
         private void RestartTransaction()
         {
-            if(state != State.Reading && state != State.Writing)
+            if (state != State.Reading && state != State.Writing)
             {
                 this.Log(LogLevel.Warning, "Tried to RESTART without an ongoing transaction");
                 return;
@@ -164,20 +168,20 @@ namespace Antmicro.Renode.Peripherals.I2C
 
             Registers.ControlA.Define(thisProvidesDoubleWordRegisterCollection)
                 .WithFlag(0, FieldMode.Write, name: "SWRST",
-                    writeCallback: (_, value) => { if(value) { Reset(); } })
+                    writeCallback: (_, value) => { if (value) { Reset(); } })
                 .WithFlag(1, out enabled, name: "ENABLE")
                 .WithEnumField(2, 3, out mode, name: "MODE",
                     changeCallback: (previousValue, value) =>
                     {
-                        switch(value)
+                        switch (value)
                         {
-                        case Mode.I2CHost:
-                            break;
+                            case Mode.I2CHost:
+                                break;
 
-                        default:
-                            this.Log(LogLevel.Warning, "{0} mode is currently not supported, reverting to {1}", value, previousValue);
-                            mode.Value = previousValue;
-                            break;
+                            default:
+                                this.Log(LogLevel.Warning, "{0} mode is currently not supported, reverting to {1}", value, previousValue);
+                                mode.Value = previousValue;
+                                break;
                         }
                     })
                 .WithReservedBits(5, 2)
@@ -191,16 +195,16 @@ namespace Antmicro.Renode.Peripherals.I2C
                 .WithEnumField(24, 2, out speedMode, name: "SPEED",
                     changeCallback: (previousValue, value) =>
                     {
-                        switch(value)
+                        switch (value)
                         {
-                        case SpeedMode.Standard:
-                        case SpeedMode.Fast:
-                        case SpeedMode.HighSpeed:
-                            break;
-                        default:
-                            this.WarningLog("Attempted write with reserved value to SPEED (0x{0:X}), ignoring", value);
-                            speedMode.Value = previousValue;
-                            break;
+                            case SpeedMode.Standard:
+                            case SpeedMode.Fast:
+                            case SpeedMode.HighSpeed:
+                                break;
+                            default:
+                                this.WarningLog("Attempted write with reserved value to SPEED (0x{0:X}), ignoring", value);
+                                speedMode.Value = previousValue;
+                                break;
                         }
                     }
                 )
@@ -222,25 +226,25 @@ namespace Antmicro.Renode.Peripherals.I2C
                     valueProviderCallback: _ => 0,
                     writeCallback: (_, value) =>
                     {
-                        switch(value)
+                        switch (value)
                         {
-                        case 0: // NOTE: No-op
-                            break;
-                        case 1:
-                            RestartTransaction();
-                            break;
-                        case 2:
-                            // NOTE: "Execute acknowledge, then read byte"
-                            //       As we execute actual byte read on reading the `DATA` register,
-                            //       we can omit that here.
-                            break;
-                        case 3:
-                            state = State.Idle;
-                            if(shouldFinishTransmission.Value && !smartMode.Value)
-                            {
-                                activePeripheral?.FinishTransmission();
-                            }
-                            break;
+                            case 0: // NOTE: No-op
+                                break;
+                            case 1:
+                                RestartTransaction();
+                                break;
+                            case 2:
+                                // NOTE: "Execute acknowledge, then read byte"
+                                //       As we execute actual byte read on reading the `DATA` register,
+                                //       we can omit that here.
+                                break;
+                            case 3:
+                                state = State.Idle;
+                                if (shouldFinishTransmission.Value && !smartMode.Value)
+                                {
+                                    activePeripheral?.FinishTransmission();
+                                }
+                                break;
                         }
                     })
                 .WithFlag(18, out shouldFinishTransmission, name: "ACKACT")
@@ -258,28 +262,28 @@ namespace Antmicro.Renode.Peripherals.I2C
             Registers.InterruptEnableClear.Define(thisProvidesByteRegisterCollection)
                 .WithFlag(0, name: "AMATCH / MB",
                     valueProviderCallback: _ => hostOnBusInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) hostOnBusInterruptEnabled = false; })
+                    writeCallback: (_, value) => { if (value) hostOnBusInterruptEnabled = false; })
                 .WithFlag(1, name: "PREC / SB",
                     valueProviderCallback: _ => clientOnBusInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) clientOnBusInterruptEnabled = false; })
+                    writeCallback: (_, value) => { if (value) clientOnBusInterruptEnabled = false; })
                 .WithReservedBits(2, 5)
                 .WithFlag(7, name: "ERROR",
                     valueProviderCallback: _ => errorInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) errorInterruptEnabled = false; })
+                    writeCallback: (_, value) => { if (value) errorInterruptEnabled = false; })
                 .WithChangeCallback((_, __) => UpdateInterrupts())
             ;
 
             Registers.InterruptEnableSet.Define(thisProvidesByteRegisterCollection)
                 .WithFlag(0, name: "AMATCH / MB",
                     valueProviderCallback: _ => hostOnBusInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) hostOnBusInterruptEnabled = true; })
+                    writeCallback: (_, value) => { if (value) hostOnBusInterruptEnabled = true; })
                 .WithFlag(1, name: "PREC / SB",
                     valueProviderCallback: _ => clientOnBusInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) clientOnBusInterruptEnabled = true; })
+                    writeCallback: (_, value) => { if (value) clientOnBusInterruptEnabled = true; })
                 .WithReservedBits(2, 5)
                 .WithFlag(7, name: "ERROR",
                     valueProviderCallback: _ => errorInterruptEnabled,
-                    writeCallback: (_, value) => { if(value) errorInterruptEnabled = true; })
+                    writeCallback: (_, value) => { if (value) errorInterruptEnabled = true; })
                 .WithChangeCallback((_, __) => UpdateInterrupts())
             ;
 
@@ -296,7 +300,7 @@ namespace Antmicro.Renode.Peripherals.I2C
                 .WithTaggedFlag("COLL / ARBLOST", 1)
                 .WithFlag(2, out acknowledgeMissing, name: "RXNACK")
                 .WithTaggedFlag("DIR", 3)
-                .WithTag("SR / BUSSTATE", 4, 2)
+                .WithValueField(4, 2, name: "SR / BUSSTATE", valueProviderCallback: _ => GetBusState())
                 .WithTaggedFlag("LOWTOUT", 6)
                 .WithTaggedFlag("CLKHOLD", 7)
                 .WithTaggedFlag("MEXTTOUT", 8)
@@ -383,6 +387,19 @@ namespace Antmicro.Renode.Peripherals.I2C
             IRQ.Set(interrupt);
         }
 
+        private byte GetBusState()
+        {
+            switch (state)
+            {
+                case State.Unknown:
+                    return (int)BusState.Unknown;
+                case State.Idle:
+                    return (int)BusState.Idle;
+                default:
+                    return (int)BusState.Owner;
+            }
+        }
+
         private State state;
         private II2CPeripheral activePeripheral;
 
@@ -412,6 +429,15 @@ namespace Antmicro.Renode.Peripherals.I2C
             Idle,
             Reading,
             Writing,
+        }
+
+        // Matching the BUSSTATE field of the Status register
+        private enum BusState
+        {
+            Unknown = 0, // when I2C bus is stuck, not used in model
+            Idle = 1, // when I2C bus is idle
+            Owner = 2, // when I2C bus is operated by us
+            Busy = 3, // when I2C bus is operated by someone else (multi-master)
         }
 
         private enum Mode : ulong
