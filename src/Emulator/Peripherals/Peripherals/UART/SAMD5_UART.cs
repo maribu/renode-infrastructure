@@ -18,7 +18,10 @@ namespace Antmicro.Renode.Peripherals.UART
         public SAMD5_UART(IMachine machine) : base(machine)
         {
             RegistersCollection = new ByteRegisterCollection(this);
-            IRQ = new GPIO();
+            DreIRQ = new GPIO();
+            TxcIRQ = new GPIO();
+            RxcIRQ = new GPIO();
+            MiscIRQ = new GPIO();
             DefineRegisters();
             Reset();
         }
@@ -39,7 +42,10 @@ namespace Antmicro.Renode.Peripherals.UART
             RegistersCollection.Reset();
         }
 
-        public GPIO IRQ { get; }
+        public GPIO DreIRQ { get; }
+        public GPIO TxcIRQ { get; }
+        public GPIO RxcIRQ { get; }
+        public GPIO MiscIRQ { get; }
 
         public ByteRegisterCollection RegistersCollection { get; }
 
@@ -157,13 +163,10 @@ namespace Antmicro.Renode.Peripherals.UART
 
         private void UpdateInterrupt()
         {
-            var flag = (dataRegisterEmptyInterruptEnable.Value && Count == 0)
-                || (transmitCompleteInterruptEnable.Value && transmitComplete.Value)
-                || (receiveCompleteInterruptEnable.Value && receiveComplete.Value)
-                || (receiveStartInterruptEnable.Value && receiveStart.Value);
-
-            this.Log(LogLevel.Debug, "IRQ set to: {0}", flag);
-            IRQ.Set(flag);
+            DreIRQ.Set(dataRegisterEmptyInterruptEnable.Value && Count == 0);
+            TxcIRQ.Set(transmitCompleteInterruptEnable.Value && transmitComplete.Value);
+            RxcIRQ.Set(receiveCompleteInterruptEnable.Value && receiveComplete.Value);
+            MiscIRQ.Set(receiveStartInterruptEnable.Value && receiveStart.Value);
         }
 
         private IFlagRegisterField transmitComplete;
